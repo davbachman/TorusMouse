@@ -1,0 +1,179 @@
+:root {
+  color: #1e1a16;
+  font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+  background:
+    radial-gradient(circle at top, #f4edd8 0%, #efe4cb 38%, #d6bea0 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+}
+
+#app {
+  position: relative;
+  min-height: 100vh;
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: linear-gradient(to bottom, rgba(43, 31, 20, 0.2), rgba(43, 31, 20, 0.8), rgba(43, 31, 20, 0.2));
+  pointer-events: none;
+}
+
+.panel-label {
+  position: absolute;
+  top: 1rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid rgba(56, 38, 21, 0.14);
+  border-radius: 999px;
+  backdrop-filter: blur(12px);
+  background: rgba(255, 248, 236, 0.66);
+  color: rgba(49, 34, 23, 0.84);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.panel-label-left {
+  left: 1rem;
+}
+
+.panel-label-right {
+  left: calc(50% + 1rem);
+}
+
+.hud {
+  position: absolute;
+  left: 50%;
+  top: 1rem;
+  transform: translateX(-50%);
+  padding: 0.55rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 38, 21, 0.18);
+  background: rgba(255, 250, 241, 0.72);
+  backdrop-filter: blur(16px);
+  color: #3d2b1d;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.cheese-counter {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  padding: 0.55rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 38, 21, 0.18);
+  background: rgba(255, 250, 241, 0.78);
+  backdrop-filter: blur(16px);
+  color: #3d2b1d;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  background: linear-gradient(135deg, rgba(255, 246, 226, 0.2), rgba(96, 62, 36, 0.42));
+  transition: opacity 180ms ease;
+}
+
+.overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.overlay-card {
+  width: min(34rem, calc(100vw - 3rem));
+  padding: 2.2rem 2.4rem;
+  border-radius: 1.8rem;
+  border: 1px solid rgba(73, 47, 25, 0.2);
+  background:
+    linear-gradient(180deg, rgba(255, 248, 236, 0.94), rgba(243, 228, 205, 0.86));
+  box-shadow:
+    0 28px 80px rgba(61, 40, 24, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.eyebrow {
+  margin: 0 0 0.65rem;
+  color: #876343;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.overlay-card h1 {
+  margin: 0;
+  color: #24170f;
+  font-size: clamp(2.2rem, 5vw, 4rem);
+  line-height: 0.94;
+}
+
+.overlay-text,
+.overlay-subtext {
+  max-width: 28rem;
+  color: #573c29;
+}
+
+.overlay-text {
+  margin: 1rem 0 0;
+  font-size: 1.08rem;
+  line-height: 1.45;
+}
+
+.overlay-subtext {
+  margin: 0.75rem 0 0;
+  font-size: 0.96rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 900px) {
+  .panel-label {
+    display: none;
+  }
+
+  .hud {
+    top: auto;
+    bottom: 1rem;
+  }
+
+  .cheese-counter {
+    top: 1rem;
+    right: 1rem;
+  }
+}

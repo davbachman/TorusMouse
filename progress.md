@@ -1,0 +1,67 @@
+Original prompt: Plan a new game. The screen is split. On the left side you see a 3-dimensional torus with a maze printed on it. On the right you see a first person view as if you are inside the maze. You are a mouse looking for the cheese. The mapping to the torus on the left is always changing so that the mouse stays at the point on the torus closest to the camera, and the maze walls and cheese appear moving on the torus. The maze walls are just lines on the 3D torus. The mouse and cheese on the 3D torus are flat decals. When you find the cheese it should look 3-dimensional in the first person view. Controls: left/right arrow keys to turn, up arrow key to move forward.
+
+2026-03-12
+- Created a Vite + TypeScript + Three.js skeleton from an empty workspace.
+- Planned the game around one authoritative toroidal maze model shared by the torus overview and first-person corridor view.
+- Installed dependencies and implemented the split-screen torus/first-person game loop, toroidal maze generation, overlays, deterministic stepping, and JSON text-state hook.
+- Verified with Playwright screenshots that:
+  - the torus overview keeps the flat mouse and cheese decals on the surface while walls slide over the torus;
+  - the first-person side renders solid corridor geometry and a visibly 3D cheese pickup;
+  - the deterministic path to the level-1 cheese reaches the `won` state;
+  - pressing `Space` after the win advances to level 2 and grows the maze to `10x10`.
+- `npm run build` passes. Vite reports a chunk-size warning because the bundle is mostly Three.js, but there are no runtime console errors in the Playwright runs.
+- Revised the torus overview art:
+  - replaced line walls with raised surface-following wall geometry so the maze reads as short walls sitting on the torus;
+  - changed the torus camera/anchor mapping so the torus lies in a horizontal plane and is viewed slightly from above while still keeping the mouse nearest the camera;
+  - replaced the circular mouse decal with a cartoon mouse and the simple wedge decal with a cartoon cheese.
+- Re-verified the revised visuals with fresh Playwright screenshots for start, immediate gameplay, and cheese approach states.
+- Added heading-based rotation to the mouse decal so the torus overview shows the same facing direction as the first-person camera. Verified with a turn-only Playwright capture.
+- Flipped the torus-side mouse heading sign so a left turn reads as a counterclockwise rotation of the decal. Verified with a left-turn Playwright capture.
+- Shrunk the torus-side mouse decal footprint to match the player collision radius in surface space, preventing it from visibly sliding under wall geometry when pressed against a wall. Verified with a wall-bump Playwright capture.
+- Added a 180-degree baseline offset to the torus-side mouse heading so the decal faces the same forward direction as the first-person camera while preserving the corrected left/right turn behavior. Verified with a forward-move Playwright capture.
+- Replaced the torus `u` mapping with `-u` in the surface parameterization and updated the local tangent basis so the overview orientation comes from the torus geometry instead of a decal-specific heading hack. Rechecked with forward-move and left-turn Playwright captures.
+- Restored the torus-side mouse width and replaced the old single-circle player collision with a rotated multi-circle mouse footprint so wall clearance matches the wider decal shape instead of relying on a skinnier render. Re-verified the wall-bump case with a fresh Playwright capture.
+- Added a torus-side visual aspect correction for the mouse decal so it renders wider on the torus without changing the collision footprint again. Rechecked idle and wall-bump torus screenshots after the adjustment.
+- Reworked the right-pane 3D cheese pickup into a cylindrical wedge with cap-mounted swiss-cheese holes and a fixed presentation yaw so the pickup reads as a cheese slab instead of a cone. Verified with refreshed deterministic cheese-approach screenshots.
+- Adjusted the left torus camera framing with a slightly higher/farther position and a small counterclockwise roll so the overview reads more horizontally. Rechecked with a fresh start-state screenshot.
+- `npm run build` still passes after the visual pass. The existing Vite chunk-size warning remains, and the latest Playwright client captures produced no runtime error file.
+- Unified the right-pane corridor wall material with the torus wall color by moving both to the same brown wall color constant. Rechecked with fresh play-state screenshots after a short turn so the right-pane wall faces were visible.
+- Tightened the right-pane cheese into a smaller cylinder-sector wedge, reduced its shadow to match, and added the two missing radial cut faces so the wedge is closed from back/side views instead of appearing open.
+- Re-ran the deterministic cheese-approach screenshot after the cheese mesh change; the smaller wedge reads correctly in the right pane and build/test still pass.
+- Audited the torus navigation direction math and left it unchanged: the mouse decal forward vector matches the actual embedded torus movement direction for sampled headings, so the occasional non-geodesic look appears to be a visualization effect of the recentered torus mapping rather than a forward-direction bug.
+- Investigated a report that torus walls disappear on level 2. Re-ran the deterministic level transition into level 2 and captured both the immediate post-transition spawn state and a short moved/turned level-2 state. In the current build the left torus walls are visible in both captures and there were no runtime errors, so no code change was made from this report alone.
+- After reviewing the user-provided blank-torus screenshot, added a second torus-wall rendering pass: dark ridge lines above the wall tops. The shaded wall mesh remains, but the overview now has a more robust wall read on level 2 and across browsers if the wall mesh gets visually buried or dropped.
+- Reverified with fresh Playwright captures for level 1 spawn and deterministic transition into level 2. In both screenshots the torus walls are clearly visible and there were no runtime errors.
+- Removed the maze-wall rendering from the left torus overview entirely. The torus side now shows only the torus surface plus the mouse, cheese, and new cat decals.
+- Added a chasing cat to gameplay:
+  - new cat state in `GameState`;
+  - torus-side flat cat decal aligned to the surface and rotated by chase heading;
+  - right-side low-poly 3D cat model placed in the wrapped maze world;
+  - simple shortest-path cat chase through the toroidal maze, updated during play.
+- Updated `render_game_to_text()` to include the cat position/cell/heading so automated checks can track the chase.
+- Verified with `npm run build` and a fresh Playwright start-state capture that the torus walls are gone and the cat decal is present on the torus. The text-state output confirms the cat state is advancing. I also ran additional scripted chase-path checks; the 3D cat model is in the first-person world, but I did not get a clean automated screenshot with the cat visibly in the camera frustum in this pass.
+
+2026-03-13
+- Removed the cat feature completely from shared types and runtime code:
+  - deleted the cat state from `GameState`;
+  - removed the torus cat decal, first-person cat model, chase update, and related text-state output;
+  - updated the start copy so the game pitch is back to cheese collection only.
+- Reworked level progression from one cheese to ten cheeses per level:
+  - `MazeLevel` now stores a `cheeses` array instead of a single cheese cell;
+  - the maze generator now deterministically picks ten cheese cells per level, keeping the farthest cell among them;
+  - game state now tracks per-cheese collection with a `collectedCheeses` boolean array.
+- Replaced the single cheese render path with multi-cheese render groups in both panes:
+  - the left torus now shows a decal for each remaining cheese;
+  - the right first-person world now shows a 3D pickup for each remaining cheese;
+  - collecting one hides only that pickup, and the level ends only after all ten are found.
+- Added a dedicated top-right cheese counter pill to the UI and wired it to live cheese progress. The overlay win state now reads `All cheese found` and only appears after all ten cheeses are collected.
+- Verification:
+  - `npm run build` passes; Vite still reports the existing bundle-size warning.
+  - Fresh browser capture at `output/web-game/multi-cheese-start/shot-0.png` shows the cat is gone, multiple cheese decals are visible on the torus, and the new counter reads `Cheese 0/10`.
+  - Deterministic browser run at `output/web-game/multi-cheese-collect-path/shot-1.png` drives the mouse to a known cheese and confirms the counter advances to `Cheese 1/10`.
+  - Matching text-state capture at `output/web-game/multi-cheese-collect-path/state-1.json` reports `\"found\":1,\"total\":10`.
+- Tightened the left-pane torus framing by moving the torus camera farther back and widening its field of view, instead of scaling the torus geometry. The full torus now fits within the left split panel.
+- Verification:
+  - `npm run build` still passes.
+  - Playwright client capture at `output/web-game/torus-fit-check/shot-0.png` shows the full torus visible inside the left pane.
+  - `output/web-game/torus-fit-check/state-0.json` still reports the expected start state. The only console issue in `errors-0.json` is the pre-existing favicon 404.

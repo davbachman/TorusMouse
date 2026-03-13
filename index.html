@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Torus Mouse</title>
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="./favicon.svg"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game-canvas" aria-label="Torus Mouse game canvas"></canvas>
+      <div class="divider" aria-hidden="true"></div>
+      <div id="hud" class="hud"></div>
+      <div id="cheese-counter" class="cheese-counter"></div>
+      <div class="panel-label panel-label-left">Torus map</div>
+      <div class="panel-label panel-label-right">Mouse view</div>
+      <div id="overlay" class="overlay">
+        <div class="overlay-card">
+          <p class="eyebrow">Torus labyrinth</p>
+          <h1 id="overlay-title"></h1>
+          <p id="overlay-text" class="overlay-text"></p>
+          <p id="overlay-subtext" class="overlay-subtext"></p>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
