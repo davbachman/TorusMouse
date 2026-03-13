@@ -65,3 +65,14 @@ Original prompt: Plan a new game. The screen is split. On the left side you see 
   - `npm run build` still passes.
   - Playwright client capture at `output/web-game/torus-fit-check/shot-0.png` shows the full torus visible inside the left pane.
   - `output/web-game/torus-fit-check/state-0.json` still reports the expected start state. The only console issue in `errors-0.json` is the pre-existing favicon 404.
+- Added GitHub Pages deployment support:
+  - Vite now builds with the `/TorusMouse/` base path for production while keeping `/` for local dev.
+  - Added `.github/workflows/deploy.yml` to build and deploy the site with GitHub Actions Pages.
+  - Added `README.md` with the live app link, game description, controls, and the required attribution tagline.
+  - Preserved the existing remote `LICENSE` file when importing the project into the GitHub repo.
+- Added `public/favicon.svg` and linked it from `index.html` so the deployed site no longer depends on a missing default favicon path.
+- Initialized the local git repository, merged the remote `main` history, committed the game, and pushed to `https://github.com/davbachman/TorusMouse.git`.
+- Deployment verification:
+  - Local subdirectory simulation at `http://127.0.0.1:4175/TorusMouse/` loaded successfully, with the expected start-state JSON in `output/web-game/pages-subdir-check/state-0.json`.
+  - GitHub Actions run `23054292905` (`Deploy GitHub Pages`) completed successfully for commit `1295349f72ef47a324c191e6dea6f2911ffb9f77`.
+  - The live site at `https://davbachman.github.io/TorusMouse/` now returns HTTP 200 and boots the game; browser capture is in `output/web-game/live-pages-check/shot-0.png`.
