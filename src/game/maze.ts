@@ -11,6 +11,8 @@ import {
 const ALL_WALLS = WALL_NORTH | WALL_EAST | WALL_SOUTH | WALL_WEST;
 const GOLDEN_RATIO_32 = 0x9e3779b1;
 const CHEESE_COUNT = 10;
+const CAT_BASE_COUNT = 4;
+const CAT_MAX_COUNT = 8;
 
 const OPPOSITE_WALL: Record<number, number> = {
   [WALL_NORTH]: WALL_SOUTH,
@@ -256,6 +258,72 @@ function pickCheeseCells(maze: MazeLevel, rng: () => number, count: number): Gri
   return selected;
 }
 
+function catCountForLevel(levelIndex: number): number {
+  return Math.min(CAT_MAX_COUNT, CAT_BASE_COUNT + levelIndex);
+}
+
+function pickCatSpawnCells(maze: MazeLevel, rng: () => number, count: number): GridPoint[] {
+  const blockedKeys = new Set([keyForPoint(maze.spawn), ...maze.cheeses.map(keyForPoint)]);
+  const spawnDistances = computeDistances(maze, maze.spawn);
+  const candidates = Array.from({ length: maze.width * maze.height }, (_, index) => ({
+    x: index % maze.width,
+    y: Math.floor(index / maze.width),
+  })).filter((point) => !blockedKeys.has(keyForPoint(point)));
+
+  const tieBreakers = new Map<string, number>();
+  for (const point of candidates) {
+    tieBreakers.set(keyForPoint(point), rng());
+  }
+
+  const selected: GridPoint[] = [];
+  const selectedKeys = new Set<string>();
+  const selectedDistances = new Map<string, Map<string, number>>();
+  const totalCount = Math.min(count, candidates.length);
+
+  while (selected.length < totalCount) {
+    let bestPoint: GridPoint | null = null;
+    let bestScore = Number.NEGATIVE_INFINITY;
+    let bestTieBreaker = Number.NEGATIVE_INFINITY;
+
+    for (const candidate of candidates) {
+      const candidateKey = keyForPoint(candidate);
+      if (selectedKeys.has(candidateKey)) {
+        continue;
+      }
+
+      const spawnDistance = spawnDistances.get(candidateKey) ?? 0;
+      let spacingDistance = spawnDistance;
+
+      for (const chosen of selected) {
+        const chosenKey = keyForPoint(chosen);
+        let distanceMap = selectedDistances.get(chosenKey);
+        if (!distanceMap) {
+          distanceMap = computeDistances(maze, chosen);
+          selectedDistances.set(chosenKey, distanceMap);
+        }
+        spacingDistance = Math.min(spacingDistance, distanceMap.get(candidateKey) ?? 0);
+      }
+
+      const score = spawnDistance * 2 + spacingDistance * 3;
+      const tieBreaker = tieBreakers.get(candidateKey) ?? 0;
+      if (score > bestScore || (score === bestScore && tieBreaker > bestTieBreaker)) {
+        bestPoint = candidate;
+        bestScore = score;
+        bestTieBreaker = tieBreaker;
+      }
+    }
+
+    if (!bestPoint) {
+      break;
+    }
+
+    selected.push(bestPoint);
+    selectedKeys.add(keyForPoint(bestPoint));
+  }
+
+  return selected;
+}
+
 export function getCell(maze: MazeLevel, x: number, y: number) {
   return maze.cells[indexFor(wrap(x, maze.width), wrap(y, maze.height), maze.width)];
 }
@@ -311,6 +379,7 @@ export function generateToroidalMaze(levelIndex: number, seed: number): MazeLeve
     cells,
     spawn: { x: 0, y: 0 },
     cheeses: [],
+    catSpawns: [],
     levelIndex,
     seed,
   };
@@ -320,5 +389,6 @@ export function generateToroidalMaze(levelIndex: number, seed: number): MazeLeve
   if (!maze.cheeses.some((point) => point.x === farthest.x && point.y === farthest.y)) {
     maze.cheeses[0] = farthest;
   }
+  maze.catSpawns = pickCatSpawnCells(maze, rng, catCountForLevel(levelIndex));
   return maze;
 }

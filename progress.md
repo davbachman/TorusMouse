@@ -76,3 +76,52 @@ Original prompt: Plan a new game. The screen is split. On the left side you see 
   - Local subdirectory simulation at `http://127.0.0.1:4175/TorusMouse/` loaded successfully, with the expected start-state JSON in `output/web-game/pages-subdir-check/state-0.json`.
   - GitHub Actions run `23054292905` (`Deploy GitHub Pages`) completed successfully for commit `1295349f72ef47a324c191e6dea6f2911ffb9f77`.
   - The live site at `https://davbachman.github.io/TorusMouse/` now returns HTTP 200 and boots the game; browser capture is in `output/web-game/live-pages-check/shot-0.png`.
+
+2026-05-02
+- Restored visible maze walls on the left torus overview:
+  - reused the right-pane collision wall segments as the authoritative wall list;
+  - added thick surface-following torus wall meshes plus ridge lines that recenter with the mouse.
+- Added rat poison hazards:
+  - `MazeLevel` now stores deterministic `poisons` cells, excluding spawn and cheese cells;
+  - level 1 starts with 4 poison hazards and later levels scale up to 8;
+  - poison renders only in the first-person maze view as green 3D bottle objects;
+  - colliding with poison switches the game to `lost` mode and shows a game-over overlay, with Space restarting level 1.
+- Added `scripts/behavior-check.mjs` for Playwright-backed behavior verification of torus wall state, poison state, no torus poison decals, and poison collision loss.
+- Added Three.js type coverage so `npx tsc --noEmit` can type-check this project.
+- Verification:
+  - `node scripts/behavior-check.mjs` passes after first failing on the missing torus-wall state contract.
+  - `npx tsc --noEmit` passes.
+  - `npm run build` passes; Vite still reports the existing Three.js chunk-size warning.
+  - Playwright client capture at `output/web-game/final-torus-poison-check/shot-0.png` shows thickened torus walls and no poison decals in the torus view.
+  - Close-up browser capture at `output/web-game/poison-closeup/shot-1.png` shows the 3D poison bottle in the first-person view with no console errors.
+- Adjusted the torus overview walls from raised geometry toward flat decal-like ribbons:
+  - reduced the torus wall lift, height, and width;
+  - stopped emitting raised side/end faces for the torus walls;
+  - softened the material opacity and ridge line so the maze reads as painted/printed paths on the torus surface.
+- Added a local `src/three.d.ts` ambient declaration instead of relying on the brittle external `@types/three` package.
+- Verification:
+  - `node scripts/behavior-check.mjs` passes.
+  - `npx tsc --noEmit` passes.
+  - `npm run build` passes; the existing Three.js chunk-size warning remains.
+  - Playwright client capture at `output/web-game/flat-torus-wall-check/shot-0.png` shows the flatter torus-wall decals.
+- Lowered the torus wall decal lift further so the maze markings hug the torus surface instead of reading as slightly floating:
+  - reduced `TORUS_WALL_BASE_LIFT` from `0.018` to `0.004`;
+  - reduced decal thickness from `0.014` to `0.002`;
+  - lowered the ridge line to sit just above the surface ribbon.
+- Verification:
+  - `node scripts/behavior-check.mjs` passes.
+  - `npx tsc --noEmit` passes.
+  - `npm run build` passes; the existing Three.js chunk-size warning remains.
+  - Playwright client capture at `output/web-game/surface-hugging-torus-wall-check/shot-0.png` shows the surface-hugging wall decals.
+- Replaced static rat poison hazards with slow chasing cats:
+  - `MazeLevel` now stores deterministic `catSpawns`, and `GameState` stores continuous cat position/heading state;
+  - cats move through open maze passages toward the player using shortest-path cell routing at `0.72` world units per second, much slower than the player speed of `3.05`;
+  - cats render only in the first-person maze view as low-poly 3D cat actors, with no cat decals on the torus overview;
+  - colliding with a cat switches to the existing `lost` mode and game-over overlay;
+  - `scripts/behavior-check.mjs` now verifies cat state, slow movement, no torus cat rendering, and cat collision loss.
+- Verification:
+  - `node scripts/behavior-check.mjs` passes after first failing on the old poison state.
+  - `npx tsc --noEmit` passes.
+  - `npm run build` passes; the existing Three.js chunk-size warning remains.
+  - Playwright client capture at `output/web-game/slow-cat-start-check/shot-0.png` confirms cats are absent from the torus view.
+  - Canvas capture at `output/web-game/slow-cat-closeup/canvas-0.png` shows the first-person 3D cat model with no console errors.

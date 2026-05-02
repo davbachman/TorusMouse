@@ -12,6 +12,7 @@ import {
   HemisphereLight,
   LineBasicMaterial,
   LineSegments,
+  Material,
   MathUtils,
   Mesh,
   MeshBasicMaterial,
@@ -30,6 +31,7 @@ import {
 import { generateToroidalMaze, isDirectionOpen, levelSeed, traversableExits } from "./maze";
 import { type SurfaceFrame, TorusViewModel } from "./torusViewModel";
 import {
+  type CatState,
   type CollisionRect,
   type GameState,
   type GridPoint,
@@ -42,6 +44,7 @@ declare global {
   interface Window {
     render_game_to_text?: () => string;
     advanceTime?: (ms: number) => Promise<void>;
+    move_player_to_cat_for_test?: (options?: { collide?: boolean }) => void;
   }
 }
 
@@ -54,14 +57,16 @@ const PLAYER_RADIUS = 0.38;
 const PLAYER_SPEED = 3.05;
 const TURN_SPEED = Math.PI * 0.88;
 const CHEESE_PICKUP_RADIUS = 0.72;
+const CAT_COLLISION_RADIUS = 0.82;
+const CAT_SPEED = 0.72;
 const FIXED_STEP = 1 / 60;
 
 const TORUS_MAJOR_RADIUS = 2.75;
 const TORUS_MINOR_RADIUS = 0.92;
-const TORUS_WALL_BASE_LIFT = 0.01;
-const TORUS_WALL_HEIGHT = 0.22;
-const TORUS_WALL_HALF_WIDTH = 0.072;
-const TORUS_WALL_RIDGE_LIFT = TORUS_WALL_HEIGHT + 0.008;
+const TORUS_WALL_BASE_LIFT = 0.004;
+const TORUS_WALL_HEIGHT = 0.002;
+const TORUS_WALL_HALF_WIDTH = 0.058;
+const TORUS_WALL_RIDGE_LIFT = TORUS_WALL_BASE_LIFT + TORUS_WALL_HEIGHT + 0.001;
 const TORUS_DECAL_LIFT = 0.02;
 const LEFT_TORUS_CAMERA_POSITION = new Vector3(0, -13.2, 8.2);
 const LEFT_TORUS_CAMERA_ROLL = MathUtils.degToRad(-3.2);
@@ -110,13 +115,17 @@ function shortestWrappedDelta(from: number, to: number, size: number): number {
   return delta;
 }
 
+function pointKey(point: GridPoint): string {
+  return `${point.x},${point.y}`;
+}
+
 function disposeGroup(group: Group): void {
   group.traverse((child) => {
     const mesh = child as Mesh;
     if (mesh.geometry) {
       mesh.geometry.dispose();
     }
-    const material = (mesh as { material?: MeshStandardMaterial | MeshStandardMaterial[] }).material;
+    const material = (mesh as { material?: Material | Material[] }).material;
     if (Array.isArray(material)) {
       material.forEach((entry) => entry.dispose());
     } else if (material) {
@@ -251,6 +260,7 @@ function appendSurfaceWallSegment(
   start: SurfaceFrame,
   end: SurfaceFrame,
 ): void {
+  void sidePositions;
   const segmentDirection = end.position.clone().sub(start.position);
   if (segmentDirection.lengthSq() < 1e-6) {
     return;
@@ -275,11 +285,7 @@ function appendSurfaceWallSegment(
   const topLeft1 = left1.clone().addScaledVector(end.normal, TORUS_WALL_HEIGHT);
   const topRight1 = right1.clone().addScaledVector(end.normal, TORUS_WALL_HEIGHT);
 
-  addQuad(sidePositions, left0, left1, topLeft1, topLeft0);
-  addQuad(sidePositions, right1, right0, topRight0, topRight1);
   addQuad(topPositions, topLeft0, topLeft1, topRight1, topRight0);
-  addQuad(sidePositions, right0, left0, topLeft0, topRight0);
-  addQuad(sidePositions, left1, right1, topRight1, topLeft1);
 }
 
 function createCheesePickup(): Group {
@@ -406,6 +412,94 @@ function createCheesePickup(): Group {
   return group;
 }
 
+function createCatActor(): Group {
+  const group = new Group();
+  const furMaterial = new MeshStandardMaterial({
+    color: "#2f241d",
+    flatShading: true,
+    roughness: 0.92,
+    metalness: 0,
+  });
+  const bellyMaterial = new MeshStandardMaterial({
+    color: "#5a4637",
+    flatShading: true,
+    roughness: 0.96,
+    metalness: 0,
+  });
+  const earMaterial = new MeshStandardMaterial({
+    color: "#d07d72",
+    flatShading: true,
+    roughness: 0.9,
+    metalness: 0,
+  });
+  const eyeMaterial = new MeshBasicMaterial({ color: "#f4d765" });
+  const noseMaterial = new MeshBasicMaterial({ color: "#16100d" });
+  const shadowMaterial = new MeshBasicMaterial({
+    color: "#211811",
+    transparent: true,
+    opacity: 0.24,
+  });
+
+  const body = new Mesh(new BoxGeometry(0.78, 0.34, 0.32), furMaterial);
+  body.position.set(0, 0.36, 0);
+  group.add(body);
+
+  const belly = new Mesh(new BoxGeometry(0.42, 0.08, 0.34), bellyMaterial);
+  belly.position.set(-0.04, 0.22, 0);
+  group.add(belly);
+
+  const head = new Mesh(new BoxGeometry(0.32, 0.28, 0.28), furMaterial);
+  head.position.set(0.5, 0.46, 0);
+  group.add(head);
+
+  const leftEar = new Mesh(new CylinderGeometry(0, 0.075, 0.16, 3), earMaterial);
+  leftEar.position.set(0.5, 0.66, 0.1);
+  leftEar.rotation.x = Math.PI * 0.5;
+  group.add(leftEar);
+
+  const rightEar = new Mesh(new CylinderGeometry(0, 0.075, 0.16, 3), earMaterial);
+  rightEar.position.set(0.5, 0.66, -0.1);
+  rightEar.rotation.x = Math.PI * 0.5;
+  group.add(rightEar);
+
+  for (const z of [-0.15, 0.15]) {
+    const frontLeg = new Mesh(new BoxGeometry(0.1, 0.28, 0.08), furMaterial);
+    frontLeg.position.set(0.22, 0.16, z);
+    group.add(frontLeg);
+
+    const rearLeg = new Mesh(new BoxGeometry(0.12, 0.26, 0.08), furMaterial);
+    rearLeg.position.set(-0.3, 0.15, z);
+    group.add(rearLeg);
+  }
+
+  const tail = new Mesh(new CylinderGeometry(0.035, 0.045, 0.62, 12), furMaterial);
+  tail.position.set(-0.5, 0.47, 0);
+  tail.rotation.z = Math.PI * 0.36;
+  group.add(tail);
+
+  const leftEye = new Mesh(new CircleGeometry(0.03, 12), eyeMaterial);
+  leftEye.position.set(0.665, 0.5, 0.07);
+  leftEye.rotation.y = Math.PI / 2;
+  group.add(leftEye);
+
+  const rightEye = new Mesh(new CircleGeometry(0.03, 12), eyeMaterial);
+  rightEye.position.set(0.665, 0.5, -0.07);
+  rightEye.rotation.y = Math.PI / 2;
+  group.add(rightEye);
+
+  const nose = new Mesh(new CircleGeometry(0.025, 12), noseMaterial);
+  nose.position.set(0.67, 0.43, 0);
+  nose.rotation.y = Math.PI / 2;
+  group.add(nose);
+
+  const baseShadow = new Mesh(new CircleGeometry(0.48, 22), shadowMaterial);
+  baseShadow.rotation.x = -Math.PI / 2;
+  baseShadow.position.y = 0.015;
+  group.add(baseShadow);
+
+  return group;
+}
+
 export class Game {
   private readonly canvas: HTMLCanvasElement;
   private readonly hud: HTMLElement;
@@ -426,21 +520,25 @@ export class Game {
   private readonly torusWalls = new Mesh(
     new BufferGeometry(),
     new MeshBasicMaterial({
-      color: "#5b2419",
+      color: "#4a1d14",
       side: DoubleSide,
+      transparent: true,
+      opacity: 0.22,
       polygonOffset: true,
-      polygonOffsetFactor: -1,
-      polygonOffsetUnits: -1,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
     }),
   );
   private readonly torusWallTops = new Mesh(
     new BufferGeometry(),
     new MeshBasicMaterial({
-      color: "#80402b",
+      color: "#6a2b1e",
       side: DoubleSide,
+      transparent: true,
+      opacity: 0.82,
       polygonOffset: true,
-      polygonOffsetFactor: -2,
-      polygonOffsetUnits: -2,
+      polygonOffsetFactor: -4,
+      polygonOffsetUnits: -4,
     }),
   );
   private readonly torusWallRidges = new LineSegments(
@@ -448,13 +546,14 @@ export class Game {
     new LineBasicMaterial({
       color: "#3a170f",
       transparent: true,
-      opacity: 0.28,
+      opacity: 0.18,
     }),
   );
   private readonly mouseDecal = createMouseDecal();
   private readonly torusCheeseGroup = new Group();
   private readonly mazeGroup = new Group();
   private readonly cheesePickupGroup = new Group();
+  private readonly catActorGroup = new Group();
   private readonly keys = new Set<string>();
   private readonly sessionSeed = 0x5eedb33f;
   private readonly collisionScratch = new Vector2();
@@ -463,6 +562,7 @@ export class Game {
   private state: GameState;
   private torusCheeseDecals: Group[] = [];
   private cheesePickups: Group[] = [];
+  private catActors: Group[] = [];
   private wallSegments: WallSegment[] = [];
   private collisionWalls: CollisionRect[] = [];
   private accumulator = 0;
@@ -521,6 +621,7 @@ export class Game {
         heading: 0,
         radius: PLAYER_COLLISION_BOUND_RADIUS,
       },
+      cats: this.createCatsForMaze(initialMaze),
       collectedCheeses: initialMaze.cheeses.map(() => false),
     };
 
@@ -549,6 +650,9 @@ export class Game {
       }),
     );
     this.leftScene.add(torus);
+    this.leftScene.add(this.torusWalls);
+    this.leftScene.add(this.torusWallTops);
+    this.leftScene.add(this.torusWallRidges);
     this.leftScene.add(this.mouseDecal);
     this.leftScene.add(this.torusCheeseGroup);
 
@@ -558,6 +662,7 @@ export class Game {
     this.rightScene.add(corridorLight);
     this.rightScene.add(this.mazeGroup);
     this.rightScene.add(this.cheesePickupGroup);
+    this.rightScene.add(this.catActorGroup);
   }
 
   private bindEvents(): void {
@@ -572,6 +677,22 @@ export class Game {
     window.advanceTime = async (ms: number) => {
       this.manualTimeControl = true;
       this.stepSimulation(ms / 1000);
+      this.render();
+    };
+    window.move_player_to_cat_for_test = (options = { collide: true }) => {
+      const cat = this.state.cats[0];
+      if (!cat) {
+        return;
+      }
+      this.state.mode = "playing";
+      this.state.player.x = wrap(
+        options.collide === false ? cat.x - CAT_COLLISION_RADIUS - 1.05 : cat.x,
+        this.worldWidth,
+      );
+      this.state.player.y = cat.y;
+      this.state.player.heading = 0;
+      this.update(FIXED_STEP);
+      this.updateUi();
       this.render();
     };
   }
@@ -599,6 +720,9 @@ export class Game {
       this.updateUi();
     } else if (this.state.mode === "won" && event.code === "Space") {
       this.loadLevel(this.state.maze.levelIndex + 1, "playing");
+      return;
+    } else if (this.state.mode === "lost" && event.code === "Space") {
+      this.loadLevel(0, "playing");
       return;
     }
 
@@ -665,6 +789,15 @@ export class Game {
         this.state.player.y = wrap(this.state.player.y, this.worldHeight);
         this.resolveWallCollisions();
       }
+    }
+
+    this.updateCats(deltaSeconds);
+
+    if (this.hasTouchedCat()) {
+      this.state.mode = "lost";
+      this.keys.clear();
+      this.updateUi();
+      return;
     }
 
     const collectedThisTick = this.collectTouchedCheeses();
@@ -770,6 +903,106 @@ export class Game {
     return collectedCount;
   }
 
+  private updateCats(deltaSeconds: number): void {
+    const distance = CAT_SPEED * deltaSeconds;
+    for (const cat of this.state.cats) {
+      const target = this.nextCatTarget(cat);
+      const deltaX = shortestWrappedDelta(cat.x, target.x, this.worldWidth);
+      const deltaY = shortestWrappedDelta(cat.y, target.y, this.worldHeight);
+      const targetDistance = Math.hypot(deltaX, deltaY);
+      if (targetDistance < 1e-4) {
+        continue;
+      }
+
+      cat.heading = Math.atan2(deltaY, deltaX);
+      const stepDistance = Math.min(distance, targetDistance);
+      cat.x = wrap(cat.x + (deltaX / targetDistance) * stepDistance, this.worldWidth);
+      cat.y = wrap(cat.y + (deltaY / targetDistance) * stepDistance, this.worldHeight);
+    }
+  }
+
+  private nextCatTarget(cat: CatState): Vector2 {
+    const catCell = this.worldToCell(cat.x, cat.y);
+    const playerCell = this.worldToCell(this.state.player.x, this.state.player.y);
+
+    if (catCell.x === playerCell.x && catCell.y === playerCell.y) {
+      return this.nearestWrappedPoint(this.state.player.x, this.state.player.y, cat.x, cat.y);
+    }
+
+    const nextCell = this.nextCellTowardPlayer(catCell, playerCell);
+    return this.nearestWrappedPoint(
+      (nextCell.x + 0.5) * CELL_SIZE,
+      (nextCell.y + 0.5) * CELL_SIZE,
+      cat.x,
+      cat.y,
+    );
+  }
+
+  private nextCellTowardPlayer(start: GridPoint, goal: GridPoint): GridPoint {
+    const queue: GridPoint[] = [start];
+    const visited = new Set([pointKey(start)]);
+    const previous = new Map<string, GridPoint>();
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (current.x === goal.x && current.y === goal.y) {
+        break;
+      }
+
+      for (const neighbor of this.openNeighborCells(current)) {
+        const key = pointKey(neighbor);
+        if (visited.has(key)) {
+          continue;
+        }
+        visited.add(key);
+        previous.set(key, current);
+        queue.push(neighbor);
+      }
+    }
+
+    const goalKey = pointKey(goal);
+    if (!previous.has(goalKey)) {
+      return start;
+    }
+
+    let current = goal;
+    let prior = previous.get(goalKey);
+    while (prior && !(prior.x === start.x && prior.y === start.y)) {
+      current = prior;
+      prior = previous.get(pointKey(current));
+    }
+
+    return current;
+  }
+
+  private openNeighborCells(point: GridPoint): GridPoint[] {
+    const neighbors: GridPoint[] = [];
+    if (isDirectionOpen(this.state.maze, point.x, point.y, "north")) {
+      neighbors.push({ x: point.x, y: wrap(point.y - 1, this.state.maze.height) });
+    }
+    if (isDirectionOpen(this.state.maze, point.x, point.y, "east")) {
+      neighbors.push({ x: wrap(point.x + 1, this.state.maze.width), y: point.y });
+    }
+    if (isDirectionOpen(this.state.maze, point.x, point.y, "south")) {
+      neighbors.push({ x: point.x, y: wrap(point.y + 1, this.state.maze.height) });
+    }
+    if (isDirectionOpen(this.state.maze, point.x, point.y, "west")) {
+      neighbors.push({ x: wrap(point.x - 1, this.state.maze.width), y: point.y });
+    }
+    return neighbors;
+  }
+
+  private hasTouchedCat(): boolean {
+    for (const cat of this.state.cats) {
+      const deltaX = shortestWrappedDelta(this.state.player.x, cat.x, this.worldWidth);
+      const deltaY = shortestWrappedDelta(this.state.player.y, cat.y, this.worldHeight);
+      if (Math.hypot(deltaX, deltaY) < CAT_COLLISION_RADIUS) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private worldToCell(x: number, y: number): GridPoint {
     return {
       x: Math.floor(wrap(x, this.worldWidth) / CELL_SIZE),
@@ -785,16 +1018,27 @@ export class Game {
     this.state.player.x = CELL_SIZE * 0.5;
     this.state.player.y = CELL_SIZE * 0.5;
     this.state.player.heading = 0;
+    this.state.cats = this.createCatsForMaze(maze);
     this.state.collectedCheeses = maze.cheeses.map(() => false);
     this.accumulator = 0;
+    this.keys.clear();
     this.rebuildLevelGeometry();
     this.updateUi();
     this.render();
   }
 
+  private createCatsForMaze(maze = this.state.maze): CatState[] {
+    return maze.catSpawns.map((spawn) => ({
+      x: (spawn.x + 0.5) * CELL_SIZE,
+      y: (spawn.y + 0.5) * CELL_SIZE,
+      heading: 0,
+    }));
+  }
+
   private rebuildLevelGeometry(): void {
     disposeGroup(this.mazeGroup);
     this.rebuildCheeseActors();
+    this.rebuildCatActors();
     this.wallSegments = [];
     this.collisionWalls = [];
 
@@ -849,6 +1093,14 @@ export class Game {
         const cell = this.state.maze.cells[y * this.state.maze.width + x];
 
         if ((cell.walls & WALL_EAST) !== 0) {
+          const wallX = (x + 1) * CELL_SIZE;
+          this.wallSegments.push({
+            x0: wallX,
+            y0: y * CELL_SIZE,
+            x1: wallX,
+            y1: (y + 1) * CELL_SIZE,
+          });
+
           this.collisionWalls.push({
             minX: (x + 1) * CELL_SIZE - WALL_THICKNESS / 2,
             maxX: (x + 1) * CELL_SIZE + WALL_THICKNESS / 2,
@@ -870,6 +1122,14 @@ export class Game {
         }
 
         if ((cell.walls & WALL_SOUTH) !== 0) {
+          const wallY = (y + 1) * CELL_SIZE;
+          this.wallSegments.push({
+            x0: x * CELL_SIZE,
+            y0: wallY,
+            x1: (x + 1) * CELL_SIZE,
+            y1: wallY,
+          });
+
           this.collisionWalls.push({
             minX: x * CELL_SIZE - WALL_THICKNESS / 2,
             maxX: (x + 1) * CELL_SIZE + WALL_THICKNESS / 2,
@@ -910,6 +1170,17 @@ export class Game {
     }
   }
 
+  private rebuildCatActors(): void {
+    disposeGroup(this.catActorGroup);
+    this.catActors = [];
+
+    for (let index = 0; index < this.state.cats.length; index += 1) {
+      const actor = createCatActor();
+      this.catActorGroup.add(actor);
+      this.catActors.push(actor);
+    }
+  }
+
   private updateUi(): void {
     this.hud.textContent = `Level ${this.state.level}  ${this.state.maze.width}x${this.state.maze.height}`;
     this.cheeseCounter.textContent = `Cheese ${this.foundCheeseCount}/${this.state.maze.cheeses.length}`;
@@ -923,9 +1194,17 @@ export class Game {
     if (this.state.mode === "start") {
       this.overlayTitle.textContent = "Torus Mouse";
       this.overlayText.textContent =
-        "Steer the mouse through a toroidal maze and find all ten cheeses. The left side shows the torus with the mouse and the remaining cheese locations while the right side shows what the mouse sees inside the maze.";
+        "Steer the mouse through a toroidal maze, find all ten cheeses, and avoid the slow cats. The left side shows the torus with the maze, mouse, and remaining cheese locations while the right side shows what the mouse sees inside the maze.";
       this.overlaySubtext.textContent =
         "Arrow Left and Right turn. Arrow Up moves forward. Press Space or any arrow key to begin. Press F for fullscreen.";
+      return;
+    }
+
+    if (this.state.mode === "lost") {
+      this.overlayTitle.textContent = "Game over";
+      this.overlayText.textContent =
+        "A cat caught the mouse. Cats only appear in the mouse view, so keep moving and watch the path ahead.";
+      this.overlaySubtext.textContent = "Press Space to restart at level 1.";
       return;
     }
 
@@ -960,6 +1239,8 @@ export class Game {
     const worldHeight = this.worldHeight;
     const player = this.state.player;
     const { u: anchorU, v: anchorV } = this.torusViewModel.getAnchorAngles(this.leftCamera.position);
+
+    this.updateTorusWallGeometry(anchorU, anchorV);
 
     const mouseFrame = this.torusViewModel.getFrame(
       player.x,
@@ -1022,6 +1303,18 @@ export class Game {
       cheesePickup.rotation.y = CHEESE_PICKUP_YAW + index * 0.08;
     }
 
+    for (let index = 0; index < this.state.cats.length; index += 1) {
+      const cat = this.state.cats[index];
+      const actor = this.catActors[index];
+      if (!actor) {
+        continue;
+      }
+
+      const catPosition = this.nearestWrappedInstance(cat.x, cat.y);
+      actor.position.set(catPosition.x, 0, catPosition.y);
+      actor.rotation.y = -cat.heading;
+    }
+
     this.rightCamera.position.set(player.x, PLAYER_HEIGHT, player.y);
     this.rightCamera.lookAt(
       player.x + Math.cos(player.heading),
@@ -1030,7 +1323,75 @@ export class Game {
     );
   }
 
-  private nearestWrappedInstance(baseX: number, baseY: number): Vector2 {
+  private updateTorusWallGeometry(anchorU: number, anchorV: number): void {
+    const sidePositions: number[] = [];
+    const topPositions: number[] = [];
+    const ridgePositions: number[] = [];
+
+    for (const wall of this.wallSegments) {
+      const length = Math.hypot(wall.x1 - wall.x0, wall.y1 - wall.y0);
+      const segments = Math.max(7, Math.ceil(length * 2.5));
+      let previousFrame = this.torusViewModel.getFrame(
+        wall.x0,
+        wall.y0,
+        this.worldWidth,
+        this.worldHeight,
+        this.state.player.x,
+        this.state.player.y,
+        anchorU,
+        anchorV,
+        TORUS_WALL_BASE_LIFT,
+      );
+
+      for (let step = 1; step <= segments; step += 1) {
+        const t = step / segments;
+        const nextFrame = this.torusViewModel.getFrame(
+          wall.x0 + (wall.x1 - wall.x0) * t,
+          wall.y0 + (wall.y1 - wall.y0) * t,
+          this.worldWidth,
+          this.worldHeight,
+          this.state.player.x,
+          this.state.player.y,
+          anchorU,
+          anchorV,
+          TORUS_WALL_BASE_LIFT,
+        );
+        appendSurfaceWallSegment(sidePositions, topPositions, previousFrame, nextFrame);
+        previousFrame = nextFrame;
+      }
+
+      this.torusViewModel.sampleSegment(
+        wall.x0,
+        wall.y0,
+        wall.x1,
+        wall.y1,
+        this.worldWidth,
+        this.worldHeight,
+        this.state.player.x,
+        this.state.player.y,
+        anchorU,
+        anchorV,
+        TORUS_WALL_RIDGE_LIFT,
+        ridgePositions,
+      );
+    }
+
+    this.replacePositionGeometry(this.torusWalls, sidePositions);
+    this.replacePositionGeometry(this.torusWallTops, topPositions);
+    this.replacePositionGeometry(this.torusWallRidges, ridgePositions);
+  }
+
+  private replacePositionGeometry(target: Mesh | LineSegments, positions: number[]): void {
+    const geometry = new BufferGeometry();
+    geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
+    if (positions.length > 0) {
+      geometry.computeBoundingSphere();
+    }
+    target.geometry.dispose();
+    target.geometry = geometry;
+  }
+
+  private nearestWrappedPoint(baseX: number, baseY: number, anchorX: number, anchorY: number): Vector2 {
     let bestX = baseX;
     let bestY = baseY;
     let bestDistance = Number.POSITIVE_INFINITY;
@@ -1039,7 +1400,7 @@ export class Game {
       for (const offsetY of [-this.worldHeight, 0, this.worldHeight]) {
         const candidateX = baseX + offsetX;
         const candidateY = baseY + offsetY;
-        const distance = Math.hypot(candidateX - this.state.player.x, candidateY - this.state.player.y);
+        const distance = Math.hypot(candidateX - anchorX, candidateY - anchorY);
         if (distance < bestDistance) {
           bestDistance = distance;
           bestX = candidateX;
@@ -1049,6 +1410,10 @@ export class Game {
     }
 
     return new Vector2(bestX, bestY);
+  }
+
+  private nearestWrappedInstance(baseX: number, baseY: number): Vector2 {
+    return this.nearestWrappedPoint(baseX, baseY, this.state.player.x, this.state.player.y);
   }
 
   private renderGameToText(): string {
@@ -1065,6 +1430,10 @@ export class Game {
         height: this.state.maze.height,
         cellSize: CELL_SIZE,
       },
+      torus: {
+        wallSegments: this.wallSegments.length,
+        showsCats: false,
+      },
       coordinates: "origin top-left; x increases east; y increases south; maze wraps on both axes",
       player: {
         x: Number(this.state.player.x.toFixed(2)),
@@ -1076,6 +1445,17 @@ export class Game {
         found: this.foundCheeseCount,
         total: this.state.maze.cheeses.length,
         remainingCells: remainingCheeseCells,
+      },
+      cats: {
+        total: this.state.cats.length,
+        speed: CAT_SPEED,
+        collisionRadius: CAT_COLLISION_RADIUS,
+        positions: this.state.cats.map((cat) => ({
+          x: Number(cat.x.toFixed(2)),
+          y: Number(cat.y.toFixed(2)),
+          cell: this.worldToCell(cat.x, cat.y),
+          headingDegrees: Math.round(MathUtils.radToDeg(cat.heading)),
+        })),
       },
       traversableExits: exits,
       canMoveForward: this.canMoveForward(playerCell.x, playerCell.y, this.state.player.heading),

@@ -2,7 +2,7 @@
 
 Play online: [https://davbachman.github.io/TorusMouse/](https://davbachman.github.io/TorusMouse/)
 
-Torus Mouse is a split-screen browser maze game. The left panel shows a 3D torus overview with the mouse and cheese decals sliding across its surface as the toroidal maze re-centers around the player. The right panel shows the mouse's first-person view inside the maze, where you collect all 10 cheeses before advancing to the next level.
+Torus Mouse is a split-screen browser maze game. The left panel shows a 3D torus overview with thickened maze-wall curves plus mouse and cheese decals sliding across its surface as the toroidal maze re-centers around the player. The right panel shows the mouse's first-person view inside the maze, where you collect all 10 cheeses while avoiding slow cats before advancing to the next level.
 
 Created by David Bachman with GPT-5.4
 
@@ -18,4 +18,4 @@ To learn more about David Bachman and his work visit https://pzacad.pitzer.edu/~
 
 ## Goal
 
-Find all 10 cheeses in each maze. The cheese counter in the upper-right corner tracks your progress, and the maze grows as you clear levels until it reaches `16x16`.
+Find all 10 cheeses in each maze. The cheese counter in the upper-right corner tracks your progress, and the maze grows as you clear levels until it reaches `16x16`. Cats appear only in the first-person maze view; touching one ends the run.

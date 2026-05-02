@@ -4,7 +4,7 @@ export const WALL_SOUTH = 4;
 export const WALL_WEST = 8;
 
 export type Direction = "north" | "east" | "south" | "west";
-export type Mode = "start" | "playing" | "won";
+export type Mode = "start" | "playing" | "won" | "lost";
 
 export interface GridPoint {
   x: number;
@@ -21,6 +21,7 @@ export interface MazeLevel {
   cells: MazeCell[];
   spawn: GridPoint;
   cheeses: GridPoint[];
+  catSpawns: GridPoint[];
   levelIndex: number;
   seed: number;
 }
@@ -32,12 +33,19 @@ export interface PlayerState {
   radius: number;
 }
 
+export interface CatState {
+  x: number;
+  y: number;
+  heading: number;
+}
+
 export interface GameState {
   mode: Mode;
   level: number;
   sessionSeed: number;
   maze: MazeLevel;
   player: PlayerState;
+  cats: CatState[];
   collectedCheeses: boolean[];
 }
 
